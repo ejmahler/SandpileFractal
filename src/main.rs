@@ -66,9 +66,9 @@ fn main()
 		} else {
 			let color = match *fractal_value {
 				0 => image::Rgb([0,0,0]),
-				1 => image::Rgb([0,100,255]),
-				2 => image::Rgb([240,50,0]),
-				3 => image::Rgb([255,255,155]),
+				1 => image::Rgb([0,200,255]),
+				2 => image::Rgb([255,235,125]),
+				3 => image::Rgb([250,50,20]),
 				_ => image::Rgb([255,0,255]),
 			};
 
