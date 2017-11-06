@@ -6,14 +6,12 @@ use std::time::Instant;
 use image::ImageBuffer;
 use rayon::prelude::*;
 
-mod array_utils;
-
 
 fn main()
 {
-	let mut side_length = 160;
+	let mut side_length = 320;
 
-	let sandpile_value = 2<<19;
+	let sandpile_value = 2<<22;
 	let mut read_array: Vec<u32> = vec![0; side_length * side_length];
 
 
@@ -24,34 +22,27 @@ fn main()
 
 	let begin = Instant::now();
 	let mut total_iterations = 0;
-	let mut total_redistributions: u64 = 0;
+	let mut total_redistributions: i64 = 0;
 	let mut next_check = side_length / 2 - 1;
 
 	loop
 	{
 		total_iterations = total_iterations+1;
 
-		// skip the first row, because it contains metatdata about the computation instead of fractal data
-		read_array.par_chunks(side_length).zip(write_array.par_chunks_mut(side_length)).skip(1).for_each(|(input_chunk, output_chunk)| process_horizontal(input_chunk, output_chunk));
+		let mut current_redist = 0;
 
-		rayon::join(
-			|| array_utils::transpose_square_inplace(&mut read_array),
-			|| array_utils::transpose_square_inplace(&mut write_array),
-		);
+		for i in 0..3 {
+			let offset = i * side_length;
+			let limit = (side_length - i) / 3;
 
-		// skip the first row, because it contains metatdata about the computation instead of fractal data
-		read_array.par_chunks(side_length).zip(write_array.par_chunks_mut(side_length)).skip(1).for_each(|(input_chunk, output_chunk)| process_vertical(input_chunk, output_chunk));
+			let read_iter = read_array[offset..].par_chunks(side_length * 3).take(limit);
+			let write_iter = write_array[offset..].par_chunks_mut(side_length * 3).take(limit);
 
-		array_utils::transpose_square_inplace(&mut write_array);
-
-		// the top row of the read array now contains the number of redistributions
-		let mut iteration_redistributions = 0;
-		for &entry in &write_array[..side_length] {
-			iteration_redistributions += entry;
+			current_redist += read_iter.zip(write_iter).map(|(input_chunk, output_chunk)| process_row(input_chunk, output_chunk, side_length)).sum();
 		}
 
-		if iteration_redistributions > 0 {
-			total_redistributions += iteration_redistributions as u64;
+		if current_redist > 0 {
+			total_redistributions += current_redist as i64;
 
 			next_check -= 1;
 			if next_check == 0 {
@@ -88,40 +79,29 @@ fn main()
 	img.save("output.png").unwrap();
 }
 
-fn process_horizontal(input_data: &[u32], output_data: &mut [u32]) {
+fn process_row(input_data: &[u32], output_data: &mut [u32], width: usize) -> i32 {
 
-	for i in 2..(output_data.len() - 1) {
+	assert!(input_data.len() == width * 3);
+	assert!(output_data.len() == width * 3);
+
+	let mut num_redistributions = 0;
+	for i in (width+1)..(width*2-1) {
 		let val = input_data[i];
 
 		if val > 3 {
-			let distribute = val / 4;
-
-			output_data[i - 1] += distribute;
-			output_data[i + 1] += distribute;
-		}
-	}
-}
-
-fn process_vertical(input_data: &[u32], output_data: &mut [u32]) {
-	let (_, input_data) = input_data.split_first().unwrap();
-	let (num_redistributions, output_data) = output_data.split_first_mut().unwrap();
-	*num_redistributions = 0;
-
-	for i in 1..(output_data.len() - 1) {
-		let val = input_data[i];
-
-		if val > 3 {
-			*num_redistributions = *num_redistributions + 1;
+			num_redistributions += 1;
 
 			let rem = val % 4;
-
 			let distribute = val / 4;
 
+			output_data[i - width] += distribute;
 			output_data[i - 1] += distribute;
 			output_data[i] -= val - rem;
 			output_data[i + 1] += distribute;
+			output_data[i + width] += distribute;
 		}
 	}
+	num_redistributions
 }
 
 fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, side_length: &mut usize) -> usize {
@@ -177,7 +157,7 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, s
 	let closest = std::cmp::min(closest_vertical, closest_horizontal);
 
 	if closest == 0 {
-		let increase = array_utils::BLOCK_SIZE;
+		let increase = 8;
 		let new_side_length = *side_length + increase;
 
 		let mut new_main_array = vec![0; new_side_length * new_side_length];
