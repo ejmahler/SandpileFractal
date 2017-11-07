@@ -6,6 +6,9 @@ authors = ["Elliott Mahler <emahler@usc.edu>"]
 [dependencies]
 image = "*"
 rayon = "*"
+serde = "*"
+serde_derive = "*"
+bincode = "*"
 
 [dev-dependencies]
 rand = "*"
