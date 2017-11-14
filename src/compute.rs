@@ -5,6 +5,10 @@ use std::cmp::{min, max};
 use self::rayon::prelude::*;
 use common::{InitialCell, FractalResult};
 
+const TOPPLE_AMOUNT: u32 = 4;
+const TOPPLE_WIDTH: usize = 3;
+const MARGIN: usize = TOPPLE_WIDTH / 2;
+
 pub fn compute_fractal_data(initial_configuration: &[InitialCell]) -> FractalResult {
 
 	let mut side_length = initial_configuration.iter().map(|entry| max(entry.x, entry.y)).max().unwrap() + 1;
@@ -30,13 +34,13 @@ pub fn compute_fractal_data(initial_configuration: &[InitialCell]) -> FractalRes
 
 			let mut current_redist = 0;
 
-			for i in 0..3 {
+			for i in 0..TOPPLE_WIDTH {
 				let offset = i * side_length;
-				let limit = (side_length - i) / 3;
+				let limit = (side_length - i) / TOPPLE_WIDTH;
 
-				let read_iter = read_array[offset..].par_chunks(side_length * 3).take(limit);
-				let write_iter = write_array[offset..].par_chunks_mut(side_length * 3).take(limit);
-				let counting_iter = counting_array[offset..].par_chunks_mut(side_length * 3).take(limit);
+				let read_iter = read_array[offset..].par_chunks(side_length * TOPPLE_WIDTH).take(limit);
+				let write_iter = write_array[offset..].par_chunks_mut(side_length * TOPPLE_WIDTH).take(limit);
+				let counting_iter = counting_array[offset..].par_chunks_mut(side_length * TOPPLE_WIDTH).take(limit);
 
 				current_redist += read_iter.zip(write_iter).zip(counting_iter).map(|((input_chunk, output_chunk), counting_chunk)| process_row(input_chunk, output_chunk, counting_chunk, side_length)).sum();
 			}
@@ -69,23 +73,27 @@ pub fn compute_fractal_data(initial_configuration: &[InitialCell]) -> FractalRes
 
 fn process_row(input_data: &[u32], output_data: &mut [u32], counting_data: &mut [u32], width: usize) -> i32 {
 
-	assert!(input_data.len() == width * 3);
-	assert!(output_data.len() == width * 3);
+	assert!(input_data.len() == width * TOPPLE_WIDTH);
+	assert!(output_data.len() == width * TOPPLE_WIDTH);
+
+	let data_start = MARGIN * width + MARGIN;
+	let data_end = (MARGIN + 1) * width - MARGIN;
 
 	let mut num_redistributions = 0;
-	for i in (width+1)..(width*2-1) {
+	for i in data_start..data_end {
 		let val = input_data[i];
-
-		if val > 3 {
+		if val >= TOPPLE_AMOUNT {
 			num_redistributions += 1;
 			counting_data[i] += 1;
 
-			let distribute = val / 4;
+			let distribute = val / TOPPLE_AMOUNT;
 
 			output_data[i - width] += distribute;
+
 			output_data[i - 1] += distribute;
-			output_data[i] -= distribute * 4;
+			output_data[i] -= distribute * TOPPLE_AMOUNT;
 			output_data[i + 1] += distribute;
+
 			output_data[i + width] += distribute;
 		}
 	}
@@ -97,9 +105,9 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, c
 	// find the bounds of the fractal data, so that we can re-center it inside the new array
 	let mut miny = 0;
 	'outer_miny: for y in 0..*side_length {
-		for x in 1..*side_length {
+		for x in 0..*side_length {
 			let index = y * *side_length + x;
-			if main_array[index] >= 4 {
+			if main_array[index] >= TOPPLE_AMOUNT {
 				miny = y;
 				break 'outer_miny;
 			}
@@ -108,9 +116,9 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, c
 
 	let mut maxy = 0;
 	'outer_maxy: for y in (0..*side_length).rev() {
-		for x in (1..*side_length).rev() {
+		for x in (0..*side_length).rev() {
 			let index = y * *side_length + x;
-			if main_array[index] >= 4 {
+			if main_array[index] >= TOPPLE_AMOUNT {
 				maxy = y;
 				break 'outer_maxy;
 			}
@@ -121,7 +129,7 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, c
 	'outer_minx: for x in 0..*side_length {
 		for y in miny..maxy {
 			let index = y * *side_length + x;
-			if main_array[index] >= 4 {
+			if main_array[index] >= TOPPLE_AMOUNT {
 				minx = x;
 				break 'outer_minx;
 			}
@@ -132,7 +140,7 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, c
 	'outer_maxx: for x in (0..*side_length).rev() {
 		for y in (miny..maxy).rev() {
 			let index = y * *side_length + x;
-			if main_array[index] >= 4 {
+			if main_array[index] >= TOPPLE_AMOUNT {
 				maxx = x;
 				break 'outer_maxx;
 			}
@@ -144,8 +152,8 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, c
 
 	let closest = min(closest_vertical, closest_horizontal);
 
-	if closest == 0 {
-		const MIN_SIZE: usize = 160;
+	if closest < MARGIN {
+		const MIN_SIZE: usize = 800;
 		const STANDARD_INCREASE: usize = 8;
 
 		let new_side_length = max(MIN_SIZE, *side_length + STANDARD_INCREASE);
@@ -159,6 +167,7 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, c
 
 		let new_x_begin = new_side_length/2 - size_x/2;
 		let new_y_begin = new_side_length/2 - size_y/2;
+
 		rayon::join(
 			|| {
 				let old_data_rows = main_array.chunks(*side_length).skip(miny).take(size_y);
@@ -183,11 +192,11 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, c
 		*counting_array = new_counting_array;
 		*side_length = new_side_length;
 
-		increase / 2
+		increase / 4
 	} else {
 		copy_data(&main_array, &mut *secondary_array);
 
-		closest
+		closest / 2
 	}
 }
 
