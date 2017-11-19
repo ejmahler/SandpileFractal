@@ -9,6 +9,9 @@ const TOPPLE_AMOUNT: u32 = 4;
 const TOPPLE_WIDTH: usize = 3;
 const MARGIN: usize = TOPPLE_WIDTH / 2;
 
+const ROWS_PER_CHUNK: usize = MARGIN * 4;
+const REQUIRED_SIZE_MULTIPLE: usize = ROWS_PER_CHUNK / 2;
+
 pub fn compute_fractal_data(initial_configuration: &[InitialCell]) -> FractalResult {
 
 	let mut side_length = initial_configuration.iter().map(|entry| max(entry.x, entry.y)).max().unwrap() + 1;
@@ -33,14 +36,13 @@ pub fn compute_fractal_data(initial_configuration: &[InitialCell]) -> FractalRes
 			total_iterations = total_iterations+1;
 
 			let mut current_redist = 0;
+			for i in 0..2 {
+				let offset = i * (ROWS_PER_CHUNK / 2);
+				let limit = (side_length - offset) / ROWS_PER_CHUNK;
 
-			for i in 0..TOPPLE_WIDTH {
-				let offset = i * side_length;
-				let limit = (side_length - i) / TOPPLE_WIDTH;
-
-				let read_iter = read_array[offset..].par_chunks(side_length * TOPPLE_WIDTH).take(limit);
-				let write_iter = write_array[offset..].par_chunks_mut(side_length * TOPPLE_WIDTH).take(limit);
-				let counting_iter = counting_array[offset..].par_chunks_mut(side_length * TOPPLE_WIDTH).take(limit);
+				let read_iter = read_array[(offset * side_length)..].par_chunks(side_length * ROWS_PER_CHUNK).take(limit);
+				let write_iter = write_array[(offset * side_length)..].par_chunks_mut(side_length * ROWS_PER_CHUNK).take(limit);
+				let counting_iter = counting_array[(offset * side_length)..].par_chunks_mut(side_length * ROWS_PER_CHUNK).take(limit);
 
 				current_redist += read_iter.zip(write_iter).zip(counting_iter).map(|((input_chunk, output_chunk), counting_chunk)| process_row(input_chunk, output_chunk, counting_chunk, side_length)).sum();
 			}
@@ -73,28 +75,41 @@ pub fn compute_fractal_data(initial_configuration: &[InitialCell]) -> FractalRes
 
 fn process_row(input_data: &[u32], output_data: &mut [u32], counting_data: &mut [u32], width: usize) -> i32 {
 
-	assert!(input_data.len() == width * TOPPLE_WIDTH);
-	assert!(output_data.len() == width * TOPPLE_WIDTH);
+	assert_eq!(input_data.len(), output_data.len());
+	assert_eq!(input_data.len(), counting_data.len());
 
-	let data_start = MARGIN * width + MARGIN;
-	let data_end = (MARGIN + 1) * width - MARGIN;
+	assert!(input_data.len() % width == 0);
+	assert!(input_data.len() / width >= 3);
+
+	let num_rows = input_data.len() / width - MARGIN * 2;
+
+
+	let first_row = MARGIN;
+	let last_row = first_row + num_rows;
+
+	let first_column = MARGIN;
+	let last_column = width - MARGIN + 1;
 
 	let mut num_redistributions = 0;
-	for i in data_start..data_end {
-		let val = input_data[i];
-		if val >= TOPPLE_AMOUNT {
-			num_redistributions += 1;
-			counting_data[i] += 1;
+	for y in first_row..last_row {
+		for x in first_column..last_column {
+			let index = y * width + x;
 
-			let distribute = val / TOPPLE_AMOUNT;
+			let val = input_data[index];
+			if val >= TOPPLE_AMOUNT {
+				num_redistributions += 1;
+				counting_data[index] += 1;
 
-			output_data[i - width] += distribute;
+				let distribute = val / TOPPLE_AMOUNT;
 
-			output_data[i - 1] += distribute;
-			output_data[i] -= distribute * TOPPLE_AMOUNT;
-			output_data[i + 1] += distribute;
+				output_data[index - width] += distribute;
 
-			output_data[i + width] += distribute;
+				output_data[index - 1] += distribute;
+				output_data[index] -= distribute * TOPPLE_AMOUNT;
+				output_data[index + 1] += distribute;
+
+				output_data[index + width] += distribute;
+			}
 		}
 	}
 	num_redistributions
@@ -152,11 +167,12 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, c
 
 	let closest = min(closest_vertical, closest_horizontal);
 
-	if closest < MARGIN {
-		const MIN_SIZE: usize = 800;
+	if closest <= MARGIN {
+		const MIN_SIZE: usize = 120;
 		const STANDARD_INCREASE: usize = 8;
 
-		let new_side_length = max(MIN_SIZE, *side_length + STANDARD_INCREASE);
+		let new_side_length = next_multiple(max(MIN_SIZE, *side_length + STANDARD_INCREASE), REQUIRED_SIZE_MULTIPLE);
+
 		let increase = new_side_length - *side_length;
 
 		let mut new_main_array = vec![0; new_side_length * new_side_length];
@@ -203,4 +219,13 @@ fn maybe_reallocate(main_array: &mut Vec<u32>, secondary_array: &mut Vec<u32>, c
 fn copy_data<T: Copy + Sync + Send>(src: &[T], dst: &mut [T]) {
 	let chunk_size = src.len() / 8;
 	src.par_chunks(chunk_size).zip(dst.par_chunks_mut(chunk_size)).for_each(|(input_chunk, output_chunk)| output_chunk.copy_from_slice(input_chunk));
+}
+
+fn next_multiple(val: usize, multiple: usize) -> usize {
+	let distance = val % multiple;
+	if distance == 0 {
+		val
+	} else {
+		val + multiple - distance
+	}
 }
