@@ -1,9 +1,8 @@
 
-extern crate rayon;
 
 use std::cmp::{min, max};
-use self::rayon::prelude::*;
-use common::{InitialCell, FractalResult};
+use rayon::prelude::*;
+use crate::common::{InitialCell, FractalResult};
 
 const TOPPLE_AMOUNT: u32 = 4;
 const TOPPLE_WIDTH: usize = 3;
@@ -44,7 +43,7 @@ pub fn compute_fractal_data(initial_configuration: &[InitialCell]) -> FractalRes
 				let write_iter = write_array[(offset * side_length)..].par_chunks_mut(side_length * ROWS_PER_CHUNK).take(limit);
 				let counting_iter = counting_array[(offset * side_length)..].par_chunks_mut(side_length * ROWS_PER_CHUNK).take(limit);
 
-				current_redist += read_iter.zip(write_iter).zip(counting_iter).map(|((input_chunk, output_chunk), counting_chunk)| process_row(input_chunk, output_chunk, counting_chunk, side_length)).sum();
+				current_redist += read_iter.zip(write_iter).zip(counting_iter).map(|((input_chunk, output_chunk), counting_chunk)| process_row(input_chunk, output_chunk, counting_chunk, side_length)).sum::<i32>();
 			}
 			
 			if current_redist > 0 {

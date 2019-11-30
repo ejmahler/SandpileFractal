@@ -1,4 +1,6 @@
 
+use serde_derive::{Serialize, Deserialize};
+
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct InitialCell {
 	pub x: usize,

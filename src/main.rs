@@ -1,7 +1,4 @@
 
-#[macro_use]
-extern crate serde_derive;
-
 mod cache;
 mod common;
 mod compute;
@@ -13,7 +10,7 @@ use common::InitialCell;
 fn main()
 {
 	let initial_configuration = [
-		InitialCell{x: 0, y: 0, value: 1 << 23},
+		InitialCell{x: 0, y: 0, value: 1 << 22},
 	];
 
 	let fractal_data = if let Some(data) = cache::load_from_cache(&initial_configuration) {
