@@ -1,14 +1,14 @@
 
 use serde_derive::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct InitialCell {
 	pub x: usize,
 	pub y: usize,
 	pub value: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct FractalResult {
 	pub initial_configuration: Vec<InitialCell>,
 	pub sand_data: Vec<u8>,

@@ -1,5 +1,4 @@
-
-
+use std::sync::Arc;
 use std::cmp::{min, max};
 use rayon::prelude::*;
 use crate::common::{InitialCell, FractalResult};
@@ -11,7 +10,52 @@ const MARGIN: usize = TOPPLE_WIDTH / 2;
 const ROWS_PER_CHUNK: usize = MARGIN * 4;
 const REQUIRED_SIZE_MULTIPLE: usize = ROWS_PER_CHUNK / 2;
 
-pub fn compute_fractal_data(initial_configuration: &[InitialCell]) -> FractalResult {
+#[derive(Clone)]
+pub struct ComputeParams {
+    pub initial_size: String,
+}
+
+
+impl Default for ComputeParams {
+    fn default() -> Self {
+        Self {
+            initial_size: "2000".into(),
+        }
+    }
+}
+
+pub async fn compute_fractal(params: ComputeParams) -> Arc<FractalResult> {
+    use crate::cache;
+    use crate::compute;
+    use std::time::Instant;
+
+    let initial_size = if params.initial_size.len() > 0 { params.initial_size.parse::<u32>().unwrap() } else { 0 };
+
+    let initial_configuration = [
+        InitialCell{x: 0, y: 0, value: initial_size},
+    ];
+
+    let fractal_data = if let Some(data) = cache::load_from_cache(&initial_configuration) {
+        data
+    } else {
+        let begin = Instant::now();
+        let result = compute::compute_fractal_data(&initial_configuration);
+        let end = Instant::now();
+        let _duration = end.duration_since(begin);
+        match cache::save_to_cache(&result) {
+            Err(()) => println!("Failed to save fractal data to cache file"),
+            _ => {},
+        };
+
+        result
+    };
+
+    Arc::new(fractal_data)
+}
+
+
+
+fn compute_fractal_data(initial_configuration: &[InitialCell]) -> FractalResult {
 
 	let mut side_length = initial_configuration.iter().map(|entry| max(entry.x, entry.y)).max().unwrap() + 1;
 

@@ -3,12 +3,18 @@ mod cache;
 mod common;
 mod compute;
 mod render;
+mod gui;
 
-use std::time::Instant;
-use common::InitialCell;
+use iced::{ Settings, Application };
 
+pub fn main() {
+    gui::FractalGUI::run(Settings::default())
+}
+/*
 fn main()
 {
+
+
 	let initial_configuration = [
 		InitialCell{x: 0, y: 0, value: 1 << 22},
 	];
@@ -32,4 +38,4 @@ fn main()
 	};
 	
 	render::render_fractal_data(&fractal_data.sand_data, &fractal_data.count_data, fractal_data.side_length);
-}
+}*/

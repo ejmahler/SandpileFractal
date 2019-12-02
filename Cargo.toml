@@ -10,3 +10,5 @@ rayon = "*"
 serde = "*"
 serde_derive = "*"
 bincode = "*"
+reqwest = "*"
+iced = { git = "https://github.com/hecrj/iced", branch = "feature/image-from-bytes" }
